@@ -1,170 +1,187 @@
--- [[ PRADAXCA CUSTOM PROTECTED EDITION ]] --
--- Hidden strings to bypass simple keyword scanners
-local _0x1 = "ChargeFishingRod"
-local _0x2 = "RequestFishingMinigameStarted"
-local _0x3 = "CatchFishCompleted"
+-- سكريبت صيد Pradaxca المطور للجوال (Delta Executor)
+repeat task.wait() until game:IsLoaded()
 
-local S = game:GetService("ReplicatedStorage")
-local N = require(S.Packages.Net)
-local V = game:GetService("VirtualInputManager")
-local P = game:GetService("Players").LocalPlayer
+local ReplicatedStorage = game:GetService('ReplicatedStorage')
+local Net = require(ReplicatedStorage.Packages.Net)
+local VIM = game:GetService("VirtualInputManager")
+local UserInputService = game:GetService("UserInputService")
 
--- UI Construction (Custom & Draggable)
+local ChargeFishingRod = Net:RemoteFunction('ChargeFishingRod')
+local RequestFishingMinigame = Net:RemoteFunction('RequestFishingMinigameStarted')
+local CatchFishCompleted = Net:RemoteFunction('CatchFishCompleted')
+
+-- القيم الافتراضية (كلهم طافيين في البداية)
+getgenv().InstantEnabled = false 
+getgenv().InstantV2Enabled = false
+getgenv().LegitEnabled = false
+
+-- تنظيف الواجهة القديمة إذا وجدت
+local CoreGui = (gethui and gethui()) or game:GetService("CoreGui")
+if CoreGui:FindFirstChild("PradaxcaMobile") then
+    CoreGui.PradaxcaMobile:Destroy()
+end
+
+-- إنشاء الواجهة الأساسية
 local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "PradaxcaMobile"
+ScreenGui.Parent = CoreGui
+ScreenGui.ResetOnSpawn = false
+
 local MainFrame = Instance.new("Frame")
-local Title = Instance.new("TextLabel")
-local Holder = Instance.new("ScrollingFrame")
-local UIListLayout = Instance.new("UIListLayout")
-
-ScreenGui.Name = "PX_" .. math.random(100,999)
-ScreenGui.Parent = game:GetService("CoreGui")
-ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-
-MainFrame.Name = "Main"
-MainFrame.Parent = ScreenGui
-MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 160, 0, 170) -- حجم صغير ومناسب للجوال
+MainFrame.Position = UDim2.new(0.5, -80, 0.5, -85) -- في منتصف الشاشة
+MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 MainFrame.BorderSizePixel = 0
-MainFrame.Position = UDim2.new(0.5, -60, 0.5, -80) -- منتصف الشاشة
-MainFrame.Size = UDim2.new(0, 130, 0, 180)
 MainFrame.Active = true
-MainFrame.Draggable = true -- تفعيل السحب
+MainFrame.Parent = ScreenGui
 
-local UICorner = Instance.new("UICorner", MainFrame)
+local UICorner = Instance.new("UICorner")
 UICorner.CornerRadius = UDim.new(0, 10)
+UICorner.Parent = MainFrame
 
-local UIStroke = Instance.new("UIStroke", MainFrame)
-UIStroke.Color = Color3.fromRGB(60, 60, 60)
-UIStroke.Thickness = 2
+-- [نظام السحب بالإصبع للجوال]
+local dragging, dragInput, dragStart, startPos
+MainFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = MainFrame.Position
+    end
+end)
+MainFrame.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
+    end
+end)
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        local delta = input.Position - dragStart
+        MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+    end
+end)
 
-Title.Parent = MainFrame
-Title.BackgroundTransparency = 1
+local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, 0, 0, 30)
+Title.BackgroundTransparency = 1
+Title.Text = "PRADAXCA HUB"
+Title.TextColor3 = Color3.fromRGB(255, 255, 0)
 Title.Font = Enum.Font.GothamBold
-Title.Text = "PRADAXCA"
-Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-Title.TextSize = 14
+Title.TextSize = 12
+Title.Parent = MainFrame
 
-Holder.Parent = MainFrame
-Holder.BackgroundTransparency = 1
-Holder.Position = UDim2.new(0, 5, 0, 35)
-Holder.Size = UDim2.new(1, -10, 1, -40)
-Holder.CanvasSize = UDim2.new(0, 0, 1.2, 0)
-Holder.ScrollBarThickness = 0
-
-UIListLayout.Parent = Holder
-UIListLayout.Padding = UDim.new(0, 5)
-UIListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-
--- Fishing Logic States
-_G.S1 = false -- Instant
-_G.S2 = false -- Safe
-_G.S3 = false -- Legit
-
-local function CreateButton(txt, callback)
+-- دالة لإنشاء الأزرار الثلاثة
+local function CreateBtn(name, text, yPos)
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(1, 0, 0, 35)
-    btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-    btn.Font = Enum.Font.Gotham
-    btn.Text = txt
-    btn.TextColor3 = Color3.fromRGB(200, 200, 200)
-    btn.TextSize = 12
-    btn.AutoButtonColor = true
-    btn.Parent = Holder
-    
-    local c = Instance.new("UICorner", btn)
-    c.CornerRadius = UDim.new(0, 6)
-    
-    btn.MouseButton1Click:Connect(function()
-        callback(btn)
-    end)
+    btn.Name = name
+    btn.Size = UDim2.new(0.8, 0, 0, 35)
+    btn.Position = UDim2.new(0.1, 0, 0, yPos)
+    btn.BackgroundColor3 = Color3.fromRGB(150, 0, 0) -- أحمر (مطفأ)
+    btn.Text = text .. "\n[OFF]"
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 10
+    btn.Parent = MainFrame
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
     return btn
 end
 
--- Function Logic with obfuscated calls
-local function run_1() -- Instant
+local Btn1 = CreateBtn("BtnInstant", "INSTANT FISH", 40)
+local Btn2 = CreateBtn("BtnV2", "INSTANT V2", 80)
+local Btn3 = CreateBtn("BtnLegit", "LEGIT TAP", 120)
+
+-- وظيفة تحديث شكل الأزرار
+local function UpdateUI()
+    Btn1.BackgroundColor3 = getgenv().InstantEnabled and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(150, 0, 0)
+    Btn1.Text = "INSTANT FISH\n" .. (getgenv().InstantEnabled and "[ON]" or "[OFF]")
+
+    Btn2.BackgroundColor3 = getgenv().InstantV2Enabled and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(150, 0, 0)
+    Btn2.Text = "INSTANT V2\n" .. (getgenv().InstantV2Enabled and "[ON]" or "[OFF]")
+
+    Btn3.BackgroundColor3 = getgenv().LegitEnabled and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(150, 0, 0)
+    Btn3.Text = "LEGIT TAP\n" .. (getgenv().LegitEnabled and "[ON]" or "[OFF]")
+end
+
+-- منطق العمليات (السكربت البرمجي)
+local function runInstant()
     task.spawn(function()
-        while _G.S1 do
+        while getgenv().InstantEnabled do
             pcall(function()
-                local t = workspace:GetServerTimeNow()
-                N:RemoteFunction(_0x1):InvokeServer(nil, nil, t, nil)
-                N:RemoteFunction(_0x2):InvokeServer(0, 1, t)
-                task.wait(0.05)
-                if _G.S1 then N:RemoteFunction(_0x3):InvokeServer() end
+                local T = workspace:GetServerTimeNow()
+                ChargeFishingRod:InvokeServer(nil, nil, T, nil)
+                RequestFishingMinigame:InvokeServer(0, 1, T)
+                task.wait(0.1)
+                CatchFishCompleted:InvokeServer()
             end)
-            task.wait(0.01)
+            task.wait(0.2)
         end
     end)
 end
 
-local function run_2() -- Safe
+local function runV2()
     task.spawn(function()
-        while _G.S2 do
+        while getgenv().InstantV2Enabled do
             pcall(function()
-                local t = workspace:GetServerTimeNow()
-                N:RemoteFunction(_0x1):InvokeServer(nil, nil, t, nil)
-                N:RemoteFunction(_0x2):InvokeServer(0, 0.3 + (math.random()*0.2), t)
-                task.wait(math.random(20, 40) / 10)
-                if _G.S2 then N:RemoteFunction(_0x3):InvokeServer() end
+                local T = workspace:GetServerTimeNow()
+                ChargeFishingRod:InvokeServer(nil, nil, T, nil)
+                RequestFishingMinigame:InvokeServer(0, 0.4, T)
+                task.wait(math.random(2, 4))
+                CatchFishCompleted:InvokeServer()
             end)
             task.wait(0.5)
         end
     end)
 end
 
-local function run_3() -- Legit
+local function runLegit()
     task.spawn(function()
-        local cam = workspace.CurrentCamera
-        while _G.S3 do
+        while getgenv().LegitEnabled do
             pcall(function()
-                local vs = cam.ViewportSize
-                local rx, ry = (vs.X/2)+math.random(-40,40), (vs.Y/2)+math.random(-40,40)
-                V:SendMouseButtonEvent(rx, ry, 0, true, game, 1)
-                task.wait(math.random(20,70)/1000)
-                V:SendMouseButtonEvent(rx, ry, 0, false, game, 1)
+                local x = math.random(200, 500)
+                local y = math.random(200, 500)
+                VIM:SendMouseButtonEvent(x, y, 0, true, game, 1)
+                task.wait(0.05)
+                VIM:SendMouseButtonEvent(x, y, 0, false, game, 1)
             end)
-            task.wait(math.random(80,150)/1000)
+            task.wait(0.1)
         end
     end)
 end
 
--- Buttons Setup
-CreateButton("⚡ INSTANT", function(self)
-    _G.S1 = not _G.S1
-    _G.S2, _G.S3 = false, false
-    if _G.S1 then
-        self.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
-        run_1()
-    else
-        self.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+-- برمجة الضغط على الأزرار
+Btn1.MouseButton1Click:Connect(function()
+    getgenv().InstantEnabled = not getgenv().InstantEnabled
+    if getgenv().InstantEnabled then
+        getgenv().InstantV2Enabled = false
+        getgenv().LegitEnabled = false
+        runInstant()
     end
+    UpdateUI()
 end)
 
-CreateButton("🛡️ SAFE V2", function(self)
-    _G.S2 = not _G.S2
-    _G.S1, _G.S3 = false, false
-    if _G.S2 then
-        self.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
-        run_2()
-    else
-        self.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+Btn2.MouseButton1Click:Connect(function()
+    getgenv().InstantV2Enabled = not getgenv().InstantV2Enabled
+    if getgenv().InstantV2Enabled then
+        getgenv().InstantEnabled = false
+        getgenv().LegitEnabled = false
+        runV2()
     end
+    UpdateUI()
 end)
 
-CreateButton("🎯 LEGIT", function(self)
-    _G.S3 = not _G.S3
-    _G.S1, _G.S2 = false, false
-    if _G.S3 then
-        self.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
-        run_3()
-    else
-        self.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+Btn3.MouseButton1Click:Connect(function()
+    getgenv().LegitEnabled = not getgenv().LegitEnabled
+    if getgenv().LegitEnabled then
+        getgenv().InstantEnabled = false
+        getgenv().InstantV2Enabled = false
+        runLegit()
     end
+    UpdateUI()
 end)
 
-CreateButton("❌ CLOSE", function()
-    _G.S1, _G.S2, _G.S3 = false, false, false
-    ScreenGui:Destroy()
-end)
-
--- Notification
-print("PRADAXCA Loaded Successfully")
+UpdateUI()
